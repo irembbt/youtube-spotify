@@ -1,4 +1,6 @@
 venv/
 .env
+setup.sh
 .vscode/
 __pycache__/
+.cache-irembulut
