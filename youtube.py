@@ -1,0 +1,104 @@
+import os
+import pickle
+import requests
+import youtube_dl
+
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from pprint import pprint
+
+
+class YoutubeVideos:
+    def __init__(self, client_secrets_filename):
+        self.youtube_client = self.get_youtube_client(client_secrets_filename)
+        self.all_song_info = {}
+
+    def get_youtube_client(self, client_secrets_filename):
+        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
+        scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
+        api_service_name = "youtube"
+        api_version = "v3"
+
+        cache_name = "youtube_credentials.pickle"
+
+        creds = None
+        if os.path.exists(cache_name):
+            with open(cache_name, "rb") as f:
+                creds = pickle.load(f)
+
+        if (
+            not creds or not creds.valid
+        ):  # creds.valid checks if stored auth token can be used as is.
+            if creds and creds.expired and creds.refresh_token:
+                # creds.expired checks if auth token needs to be refreshed.
+                creds.refresh(Request())
+            else:
+                # Get credentials and create an API client
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    client_secrets_filename, scopes
+                )
+                creds = flow.run_local_server(port=0)
+
+            with open(cache_name, "wb") as f:
+                pickle.dump(creds, f)
+
+        # from the Youtube DATA API
+        youtube_client = build(api_service_name, api_version, credentials=creds)
+
+        return youtube_client
+
+    def get_liked_videos(self):
+        # Grab Our Liked Videos & Create A Dictionary Of Important Song Information
+        request = self.youtube_client.videos().list(
+            part="snippet,contentDetails,statistics", myRating="like"
+        )
+        response = request.execute()
+
+        import json
+
+        with open("sample_response.json", "w") as f:
+            json.dump(response, f)
+
+        # Get first set of videos
+        self._process_items(response["items"])
+
+        # Keep getting other videos
+        while "nextPageToken" in response:
+            response = (
+                self.youtube_client.videos()
+                .list(
+                    part="snippet,contentDetails,statistics",
+                    pageToken=response["nextPageToken"],
+                    myRating="like",
+                )
+                .execute()
+            )
+            self._process_items(response["items"])
+
+    def _process_items(self, items):
+        # collect each video and get important information
+        for item in items:
+            video_title = item["snippet"]["title"]
+            item_id = item["id"]
+            youtube_url = f"https://www.youtube.com/watch?v={item_id}"
+            print(video_title)
+            self._process_vid(youtube_url, video_title)
+
+    def _process_vid(self, youtube_url, video_title):
+        # use youtube_dl to collect the song name & artist name
+        video = youtube_dl.YoutubeDL({}).extract_info(youtube_url, download=False)
+        song_name = video["track"]
+        artist = video["artist"]
+
+        if song_name is not None and artist is not None:
+            # save all important info and skip any missing song and artist
+            self.all_song_info[video_title] = {
+                "youtube_url": youtube_url,
+                "song_name": song_name,
+                "artist": artist,
+                # add the uri, easy to get song to put into playlist
+                # "spotify_uri": self.get_spotify_uri(song_name, artist),
+            }
+            pprint(self.all_song_info)

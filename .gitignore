@@ -4,3 +4,5 @@ setup.sh
 .vscode/
 __pycache__/
 .cache-irembulut
+client_secret.json
+youtube_credentials.pickle
