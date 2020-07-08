@@ -50,19 +50,35 @@ class YoutubeVideos:
         return youtube_client
 
     def get_liked_videos(self):
+
+        vids = list()
+
+        for item in self._get_set_of_videos():
+            video_title = item["snippet"]["title"]
+            item_id = item["id"]
+            youtube_url = f"https://www.youtube.com/watch?v={item_id}"
+            print(video_title)
+            vid_items = self._process_vid(youtube_url, video_title)
+            if vid_items:
+                vids.append(vid_items)
+
+        return vids
+
+    def _get_set_of_videos(self):
+        vids = list()
+
         # Grab Our Liked Videos & Create A Dictionary Of Important Song Information
         request = self.youtube_client.videos().list(
             part="snippet,contentDetails,statistics", myRating="like"
         )
         response = request.execute()
 
-        import json
-
-        with open("sample_response.json", "w") as f:
-            json.dump(response, f)
-
         # Get first set of videos
-        self._process_items(response["items"])
+        vid_items = response["items"]
+        # vids.extend(vid_items)
+
+        for item in vid_items:
+            yield item
 
         # Keep getting other videos
         while "nextPageToken" in response:
@@ -75,16 +91,13 @@ class YoutubeVideos:
                 )
                 .execute()
             )
-            self._process_items(response["items"])
+            vid_items = response["items"]
+            # vids.extend(vid_items)
 
-    def _process_items(self, items):
-        # collect each video and get important information
-        for item in items:
-            video_title = item["snippet"]["title"]
-            item_id = item["id"]
-            youtube_url = f"https://www.youtube.com/watch?v={item_id}"
-            print(video_title)
-            self._process_vid(youtube_url, video_title)
+            for item in vid_items:
+                yield item
+
+        # return vids
 
     def _process_vid(self, youtube_url, video_title):
         # use youtube_dl to collect the song name & artist name
@@ -98,7 +111,5 @@ class YoutubeVideos:
                 "youtube_url": youtube_url,
                 "song_name": song_name,
                 "artist": artist,
-                # add the uri, easy to get song to put into playlist
-                # "spotify_uri": self.get_spotify_uri(song_name, artist),
             }
-            pprint(self.all_song_info)
+            return song_name, artist

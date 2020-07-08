@@ -1,5 +1,4 @@
 import json
-import secrets
 import requests
 from os import getenv
 
@@ -74,8 +73,8 @@ class SpotifySongs:
             else:
                 print(f"song {uri} already exists")
 
-        print(check_uri_exist)
-        print(existing_uri_song_set)
+        # print(check_uri_exist)
+        # print(existing_uri_song_set)
 
     def add_songs_to_spotify(self, vids, id):
         uri_list = [self.get_spotify_uri(name, artist) for name, artist in vids]
