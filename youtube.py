@@ -14,6 +14,14 @@ class YoutubeVideos:
         self.youtube_client = self.get_youtube_client(client_secrets_filename)
         self.all_song_info = {}
 
+        request = self.youtube_client.channels().list(
+            part="snippet,contentDetails,statistics", mine=True
+        )
+        channel_list = request.execute()
+        my_channel = channel_list["items"][0]
+
+        self.liked_pid = my_channel["contentDetails"]["relatedPlaylists"]["likes"]
+
     def get_youtube_client(self, client_secrets_filename):
         os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
@@ -55,7 +63,7 @@ class YoutubeVideos:
 
         for item in self._get_set_of_videos():
             video_title = item["snippet"]["title"]
-            item_id = item["id"]
+            item_id = item["contentDetails"]["videoId"]
             youtube_url = f"https://www.youtube.com/watch?v={item_id}"
             print(video_title)
             vid_items = self._process_vid(youtube_url, video_title)
@@ -68,8 +76,8 @@ class YoutubeVideos:
         vids = list()
 
         # Grab Our Liked Videos & Create A Dictionary Of Important Song Information
-        request = self.youtube_client.videos().list(
-            part="snippet,contentDetails,statistics", myRating="like"
+        request = self.youtube_client.playlistItems().list(
+            part="snippet,contentDetails,id", playlistId=self.liked_pid
         )
         response = request.execute()
 
@@ -83,11 +91,11 @@ class YoutubeVideos:
         # Keep getting other videos
         while "nextPageToken" in response:
             response = (
-                self.youtube_client.videos()
+                self.youtube_client.playlistItems()
                 .list(
-                    part="snippet,contentDetails,statistics",
+                    part="snippet,contentDetails,id",
                     pageToken=response["nextPageToken"],
-                    myRating="like",
+                    playlistId=self.liked_pid,
                 )
                 .execute()
             )
