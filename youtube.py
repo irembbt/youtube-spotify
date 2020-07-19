@@ -2,6 +2,7 @@ import os
 import pickle
 import requests
 import youtube_dl
+import datetime
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -60,15 +61,26 @@ class YoutubeVideos:
     def get_liked_videos(self):
 
         vids = list()
+        max_vid_published = datetime.datetime.min
 
         for item in self._get_set_of_videos():
             video_title = item["snippet"]["title"]
+            video_published = item["snippet"]["publishedAt"]
+            video_published_date = datetime.datetime.strptime(
+                video_published, "%Y-%m-%dT%H:%M:%SZ"
+            )
             item_id = item["contentDetails"]["videoId"]
             youtube_url = f"https://www.youtube.com/watch?v={item_id}"
             print(video_title)
             vid_items = self._process_vid(youtube_url, video_title)
+
+            max_vid_published = max(max_vid_published, video_published_date)
+
             if vid_items:
                 vids.append(vid_items)
+        if max_vid_published != datetime.datetime.min:
+            with open("bookmark.txt", "w") as f:
+                f.write(max_vid_published.strftime("%Y-%m-%dT%H:%M:%SZ"))
 
         return vids
 
