@@ -13,7 +13,7 @@ from pprint import pprint
 class YoutubeVideos:
     def __init__(self, client_secrets_filename):
         self.youtube_client = self.get_youtube_client(client_secrets_filename)
-        self.all_song_info = {}
+        self.datetime_format = "%Y-%m-%dT%H:%M:%SZ"
 
         request = self.youtube_client.channels().list(
             part="snippet,contentDetails,statistics", mine=True
@@ -22,6 +22,11 @@ class YoutubeVideos:
         my_channel = channel_list["items"][0]
 
         self.liked_pid = my_channel["contentDetails"]["relatedPlaylists"]["likes"]
+
+        with open("bookmark.txt", "r") as f:
+            bookmark_str = f.read()
+
+        self.bookmark = datetime.datetime.strptime(bookmark_str, self.datetime_format)
 
     def get_youtube_client(self, client_secrets_filename):
         os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
@@ -63,28 +68,25 @@ class YoutubeVideos:
         vids = list()
         max_vid_published = datetime.datetime.min
 
-        for item in self._get_set_of_videos():
+        for item, vid_date in self._get_set_of_videos(self.bookmark):
             video_title = item["snippet"]["title"]
-            video_published = item["snippet"]["publishedAt"]
-            video_published_date = datetime.datetime.strptime(
-                video_published, "%Y-%m-%dT%H:%M:%SZ"
-            )
             item_id = item["contentDetails"]["videoId"]
             youtube_url = f"https://www.youtube.com/watch?v={item_id}"
             print(video_title)
             vid_items = self._process_vid(youtube_url, video_title)
 
-            max_vid_published = max(max_vid_published, video_published_date)
+            max_vid_published = max(max_vid_published, vid_date)
 
             if vid_items:
                 vids.append(vid_items)
+
         if max_vid_published != datetime.datetime.min:
             with open("bookmark.txt", "w") as f:
-                f.write(max_vid_published.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                f.write(max_vid_published.strftime(self.datetime_format))
 
         return vids
 
-    def _get_set_of_videos(self):
+    def _get_set_of_videos(self, bookmark):
         vids = list()
 
         # Grab Our Liked Videos & Create A Dictionary Of Important Song Information
@@ -95,10 +97,13 @@ class YoutubeVideos:
 
         # Get first set of videos
         vid_items = response["items"]
-        # vids.extend(vid_items)
 
         for item in vid_items:
-            yield item
+            vid_date_str = item["snippet"]["publishedAt"]
+            vid_date = datetime.datetime.strptime(vid_date_str, self.datetime_format)
+            if vid_date <= bookmark:
+                return
+            yield item, vid_date
 
         # Keep getting other videos
         while "nextPageToken" in response:
@@ -112,12 +117,15 @@ class YoutubeVideos:
                 .execute()
             )
             vid_items = response["items"]
-            # vids.extend(vid_items)
 
             for item in vid_items:
-                yield item
-
-        # return vids
+                vid_date_str = item["snippet"]["publishedAt"]
+                vid_date = datetime.datetime.strptime(
+                    vid_date_str, self.datetime_format
+                )
+                if vid_date <= bookmark:
+                    return
+                yield item, vid_date
 
     def _process_vid(self, youtube_url, video_title):
         # use youtube_dl to collect the song name & artist name
@@ -126,10 +134,4 @@ class YoutubeVideos:
         artist = video["artist"]
 
         if song_name is not None and artist is not None:
-            # save all important info and skip any missing song and artist
-            self.all_song_info[video_title] = {
-                "youtube_url": youtube_url,
-                "song_name": song_name,
-                "artist": artist,
-            }
             return song_name, artist
