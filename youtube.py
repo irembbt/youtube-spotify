@@ -3,6 +3,7 @@ import pickle
 import requests
 import youtube_dl
 import datetime
+from bookmark import FileBookmark
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -13,7 +14,6 @@ from pprint import pprint
 class YoutubeVideos:
     def __init__(self, client_secrets_filename):
         self.youtube_client = self.get_youtube_client(client_secrets_filename)
-        self.datetime_format = "%Y-%m-%dT%H:%M:%SZ"
 
         request = self.youtube_client.channels().list(
             part="snippet,contentDetails,statistics", mine=True
@@ -23,10 +23,9 @@ class YoutubeVideos:
 
         self.liked_pid = my_channel["contentDetails"]["relatedPlaylists"]["likes"]
 
-        with open("bookmark.txt", "r") as f:
-            bookmark_str = f.read()
+        self.bookmark_object = FileBookmark()
 
-        self.bookmark = datetime.datetime.strptime(bookmark_str, self.datetime_format)
+        self.bookmark = self.bookmark_object.read()
 
     def get_youtube_client(self, client_secrets_filename):
         os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
@@ -81,8 +80,7 @@ class YoutubeVideos:
                 vids.append(vid_items)
 
         if max_vid_published != datetime.datetime.min:
-            with open("bookmark.txt", "w") as f:
-                f.write(max_vid_published.strftime(self.datetime_format))
+            self.bookmark_object.write(max_vid_published)
 
         return vids
 
@@ -100,7 +98,9 @@ class YoutubeVideos:
 
         for item in vid_items:
             vid_date_str = item["snippet"]["publishedAt"]
-            vid_date = datetime.datetime.strptime(vid_date_str, self.datetime_format)
+            vid_date = datetime.datetime.strptime(
+                vid_date_str, self.bookmark_object.datetime_format
+            )
             if vid_date <= bookmark:
                 return
             yield item, vid_date
@@ -121,7 +121,7 @@ class YoutubeVideos:
             for item in vid_items:
                 vid_date_str = item["snippet"]["publishedAt"]
                 vid_date = datetime.datetime.strptime(
-                    vid_date_str, self.datetime_format
+                    vid_date_str, self.bookmark_object.datetime_format
                 )
                 if vid_date <= bookmark:
                     return
